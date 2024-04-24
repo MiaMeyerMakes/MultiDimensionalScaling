@@ -1,0 +1,144 @@
+---
+title: "MDS Assignment 6"
+author: "M Meyer (22675760)"
+date: "2024-04-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(smacof)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+```
+
+# Assignment 6.1
+
+## (a) Write an R function to implement the SMACOF algorithm.
+
+The inputs for the function are:
+
+-   `start`: The starting configuration for $X^{[0]}$, if Z not given then the starting values will be randomly generated
+
+-   `delta`: the $\Delta$ matrix.
+
+-   `weights`: the default weight is 1.
+
+-   `kdim`: the number of dimensions
+
+-   `maxiter`: maximum number of iterations over which to calculate $X^{[u]}$
+
+```{r, collectcode=TRUE}
+mySmacof <- function(Xstart=NULL, delta, weights = 1, kdim = 2, maxiter = 20)
+{
+  # starting config for X
+  if (is.null(Xstart)) 
+    {
+    X = runif(n=kdim*nrow(delta), ncol = kdim)
+  } else X=Xstart
+  
+  stress_prev <-  0
+  eps <- 0.00001
+  
+  for (i in 1:maxiter)
+  {
+    dmat <- as.matrix(dist(X))
+    
+    stress <- sum((delta - dmat)^2) / 2
+    
+    # Check for convergence
+    if (i > 1 && abs(stress - stress_prev) < eps) 
+    {
+      numIter <- i
+      break
+    }
+    
+    # store sigma[k-1]
+    stress_prev <-  stress
+    
+    # Calculate B matrix
+    B <- matrix(0, nrow=nrow(dmat), ncol = nrow(dmat))
+    
+    for (r in 1:nrow(dmat))
+    {
+      for (s in 1:ncol(dmat))
+      {
+        if (s!=r && dmat[r,s]>0)
+        {
+          B[r,s] <- -delta[r,s]/dmat[r,s]
+        }
+      }
+      B[r,r] <- -sum(B[r,])
+    }
+    
+    X <- (1/nrow(dmat))*B%*%X
+  }
+  return(list(X=X, stress=stress, nrIter = numIter))
+}
+```
+
+## (b) Execute the function written in (a) using the data given by (8.25) and (8.26) of Borg and Groenen. Compare results with those of Borg and Groenen.
+
+As seen in the results below, the function returns the exact same stress for the last iteration as seen in the notes. Therefore its correctness can be established.
+
+```{r, collectcode=TRUE}
+delta <- matrix(c(0,5,3,4,5,0,2,2,3,2,0,1,4,2,1,0), byrow=TRUE, ncol = 4)
+Z <- matrix(c(-0.266, -0.539,
+              0.451, 0.252,
+              0.016, -0.238,
+              -0.200, 0.524), byrow=TRUE, ncol = 2)
+
+results <- mySmacof(Xstart=Z, delta=delta, weights = 1, kdim = 2, maxiter = 200)
+results
+```
+
+# Assignment 6.2
+
+## (a) Download the R package `smacof` from CRAN together with the accompanying file. Study the functionality available in the R package `smacof`.
+
+Done in own time.
+
+## (b) Use the function `smacofSym()` on the data from Borg and Groenen (8.25) and compare to your output to that of 6.1(b) with two MDS plots.
+
+From the results, only 16 iterations where needed in the `smacofSym` method, where in my own function 25 iterations where needed. The stress outputs for the two different methods are approximately equal.
+
+You can also see from the plots that they are similar in their clustering together of points 3 and 4 where 1 and 2 are further away and on opposite ends. However, the `smacofSym` results separate points 1 and 2 much more than the manually written function from (a).
+
+```{r}
+set.seed(123)
+res <- smacofSym(delta, type = "ratio", init = Z)
+res
+plot(results$X, main = "Comparing smacofsym() and my function",
+     ylim = c(-2.5, 1.5), xlim = c(-1.7, 1.8))
+text(results$X+0.045, labels = c(1:4), cex = 0.7)
+points(res$conf, pch = 1, col = "magenta")
+text(res$conf-0.045, labels = c(1:4), cex = 0.7, col = "magenta")
+legend("bottomright", legend = c("smacofSym", "my function"), 
+       pch = 1, col = c("magenta", "black"), cex = 0.85)
+
+```
+
+## (c) Use the function `smacofSym()` with type = "ordinal" to perform non-metric MDS on the data from (8.25) and compare your output to (b).
+
+From the plots below we can see that the points on the far left and right hand side are very close to each other for the two methods, where the coordinates for 3 and 4 differ slightly. For metric MDS, points 3 and 4 are much closer to each other than in non-metric MDS.
+
+It can also be seen that the stress for Non-metric MDS is much smaller than that of metric MDS and the number of iterations has drastically reduced.
+
+```{r}
+res_ord <- smacofSym(delta, type = "ordinal", init = Z)
+res_ord
+
+plot(res$conf, type = "n", col = "magenta", main = "MDS & Smacof", 
+     ylim = c(-1, 0.8), xlim = c(-0.6, 0.6))
+text(res$conf, labels = c(1:4), cex = 0.6, col = "magenta")
+points(res$conf, col = "magenta", cex  = 2)
+
+points(res_ord$conf, col = "blue", cex  = 2)
+text(res_ord$conf, labels = c(1:4), cex = 0.6, col = "blue")
+
+legend("bottomright", legend = c("Ratio (metric) MDS", "Non-metric MDS"), 
+       pch = 1, col = c("magenta", "blue"), cex = 0.85)
+# , main = "Non-metric MDS"
+```

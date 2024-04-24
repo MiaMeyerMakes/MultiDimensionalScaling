@@ -1,0 +1,206 @@
+---
+title: "Assignment 4 - MDS"
+author: "M Meyer (22675760)"
+date: "2024-03-8"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# import skulls data:
+pine <- read.csv("Pinedata.csv", header=TRUE)
+pine1 <- pine[,-(1:2)]
+
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(optiscale)
+library(stats)
+
+pineCols <- rep("orange", 36)
+pineCols[pine$species=="P. kes"] <- "turquoise2"
+pineCols[pine$species=="P. max"] <- "green2"
+pineCols[pine$species=="P. pat"] <- "magenta"
+pineCols[pine$species=="P. tae"] <- "yellow2"
+```
+
+# Assignment 4.1
+
+#### Write R code to construct an MDS display for an AoD analysis. Provision must be made for plotting the group means as well as all the samples.
+
+Use classical scaling to obtain $Λ_p$ and $\overline{\underline X}$.
+
+
+```{r, collectcode=TRUE}
+# Classical scaling function:
+
+classScale <- function(D)
+{
+  ddistMat <- D
+  n <- nrow(D)
+  centeringMat <- diag(n)-1/n
+  B <- centeringMat %*% ddistMat %*% centeringMat
+  
+  allEigen <- eigen(B)$values
+  eigenVals <- allEigen[allEigen>0]
+  q <- length(eigenVals)
+  
+  V <- as.matrix(eigen(B)$vectors[,1:q])
+  
+  xStar <- V%*%diag(sqrt(eigenVals))
+  return(list(xStar=xStar, Lp=eigenVals))
+}
+
+# Analysis of distance
+aod <- function(data=pine1, p=2, groups=pine$species)
+{
+  n <- nrow(data)
+  K <- length(unique(groups))
+  # scale the data:
+  Z <- scale(data)
+  # distance matrix:
+  D <- as.matrix(dist(Z, diag=TRUE))
+  # Create G:
+  groups.int <- as.integer(as.factor(groups))
+
+  G <- matrix(0, nrow=n, ncol = K)
+  for (i in 1:n)
+  {
+    G[i,groups.int[i]] <- 1
+    }
+  GG.inv <- diag(1/apply(G,2,sum))
+  # Calculate Phi
+  Phi <- -0.5*D^2
+  # Calculate Theta
+  Theta <- GG.inv%*%t(G)%*%Phi%*%G%*%GG.inv
+  # Only need theta, because CS the same as for Delta when double-centering
+  vec1 <- rep(1,K)
+  # PERFORM CLASSICAL SCALING:
+  Xstar <- ((classScale(Theta))$xStar)[,1:2] # 2 dimensions
+  Lp <- diag(((classScale(Theta))$Lp)[1:2])
+  
+  # Supplementary point coordinates:
+  d0 <- Xstar[,1]^2 + Xstar[,2]^2 # squared distance to origin
+  
+  # Unsure of how to calculate d_i...
+  # First perform classical scaling of original dataset?
+  Zi <- cmdscale(dist(scale(data)))
+  
+  di <- matrix(0, nrow=nrow(data), ncol = length(d0))
+  for (i in 1:nrow(data))
+  {
+    for (j in 1:length(d0))
+    {
+      di[i,j] <- (Zi[i,1]-Xstar[j,1])^2 + (Zi[i,2]-Xstar[j,2])^2 # squared distance to group coordinate
+    }
+  }
+  Xi <- matrix(0, nrow=nrow(data), ncol = 2)
+  s <- apply(G,2,sum)/nrow(data)
+  for (l in 1:nrow(data))
+  {
+    Xi[l,] <- -0.5*solve(Lp) %*% t(Xstar) %*% (diag(1, nrow=length(d0))-vec1%*%t(s)) %*% (di[l,]-d0)
+  }
+  plot(Xi, col = pineCols, cex = 0.7, main = "MDS display of AoD Analysis",
+       xlab = "X", ylab = "Y")
+  points(Xstar, pch=16, col = c("orange", "turquoise", "green2", "magenta", "yellow2"), cex = 1.5)
+  legend("topright", legend = unique(groups), col = c("orange", "turquoise", "green2", "magenta", "yellow2"), pch = 21 , cex = 0.8)
+}
+
+```
+
+## Assignment 4.2 
+
+#### (a)	Perform an AOD of the given data with Euclidean distances between the group means.
+
+Please note that with the changing use of notation in the notes, I suspect there might be an error in the function.
+
+I was also unsure as how to calculate $\underline d_i$.
+
+```{r}
+aod()
+```
+
+#### (b)	Write the necessary R code to perform a permutation test on AoD data. Now, use your program to use a permutation test to test if the five pine species differ significantly from one another. Calculate the ASL (achieved significance level) and display graphically.
+
+```{r}
+permTestF <- function(data=pine1, p=2, groups=pine$species)
+{
+  n <- nrow(data)
+  # scale the data:
+  Z <- scale(data)
+  # distance matrix:
+  D <- as.matrix(dist(Z, diag=TRUE))
+  
+  K <- length(unique(groups))
+  # Create G:
+  groups.int <- as.integer(as.factor(groups))
+
+  G <- matrix(0, nrow=n, ncol = K)
+  for (i in 1:n)
+  {
+    G[i,groups.int[i]] <- 1
+    }
+  G
+  GG.inv <- diag(1/apply(G,2,sum))
+  # Calculate Phi
+  Phi <- -0.5*D^2
+  # Calculate Theta
+  Theta <- GG.inv%*%t(G)%*%Phi%*%G%*%GG.inv
+  Theta.diag <- diag(diag(Theta))
+  # Delta:
+  vec1 <- rep(1,K)
+  Delta <- Theta-0.5*(Theta.diag%*%vec1%*%t(vec1) + vec1%*%t(vec1)%*%Theta.diag)
+  
+  n.vec <- apply(G,2,sum)
+  
+  B <- t(n.vec) %*% Delta %*% n.vec
+  
+  W <- numeric(K)
+  
+  for (j in 1:K)
+  {
+    W[j] <- (n/n.vec[j]) * G[,j] %*% Phi %*% G[,j]
+  }
+  W <- sum(W)
+  
+  Fstat <- (B/(K-1))/(W/(n-K))
+  return(as.double(Fstat))
+}
+
+# Create random permutations of the data's group allocations
+N <- 2000
+Fstats <- numeric(N)
+
+set.seed(12345)
+for (i in 1:N)
+{
+  randomGroup <- sample(as.integer(as.factor(pine$species)), nrow(pine), replace=FALSE)
+  randomSpecies <- unique(pine$species)[randomGroup]
+  Fstats[i] <- permTestF(groups=randomSpecies)
+}
+
+F0 <- permTestF()
+
+ggplot(data = data.frame(x = Fstats), aes(x = x)) +
+  geom_histogram(binwidth = 0.25, fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_vline(xintercept = F0, color = "firebrick", size=0.75,linetype = "dotted", alpha=0.7) + 
+  annotate("text", x = F0 + 0.1, y = 150, label = "F0", color = "firebrick", size = 4) +
+  labs(title = "Histogram of F statistics",
+       x = "F Statistic",
+       y = "Frequency")
+
+cat("Achieved significance level is ", round(sum(Fstats>F0)/N, 5))
+```
+
+
+
+
+
+
+
+
+
+
+
+

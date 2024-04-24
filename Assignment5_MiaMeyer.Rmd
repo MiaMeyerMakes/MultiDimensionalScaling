@@ -1,0 +1,64 @@
+---
+title: "MDS Assignment 5"
+author: "M Meyer (22675760)"
+date: "2024-03-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# import skulls data:
+kellog <- read.csv("Kellog.csv", header=TRUE)
+kellog1 <- kellog[,-1]
+
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+
+# pineCols <- rep("orange", 36)
+# pineCols[pine$species=="P. kes"] <- "turquoise2"
+# pineCols[pine$species=="P. max"] <- "green2"
+# pineCols[pine$species=="P. pat"] <- "magenta"
+# pineCols[pine$species=="P. tae"] <- "yellow2"
+```
+
+# Assignment 5.1
+
+### (c) Consider the Kellogg breakfast cereals dataset as given by C&C: 
+
+#### Obtain a distance matrix based upon Gower's general dissimilarity coefficient. (Hint: Study the help file of the R function `daisy()` in package `cluster`). 
+
+```{r, collectcode=TRUE}
+# first scale the kellog dataset before doing any further calculations:
+kellog1$Shelf <- as.factor(kellog1$Shelf)
+kellog1$VitMins <- as.factor(kellog1$VitMins)
+kdist <- daisy(kellog1, metric = "gower")
+kdist1 <- daisy(kellog1, metric = "gower", stand=TRUE)
+# round(kdist,3)
+
+```
+
+#### Perform a non-metric MDS using `isoMDS()`. Compare results with those of C&C.
+
+From the results below, we can see that the stress agrees with that of the textbook, being $15\%$. Even though the plot looks different than Figure 3.2 from the textbook, the configurations agree and in both of them the All Bran cereals are a bit separate in the one corner (bottom left below) and the corn products are close to each other (Cornflakes, Special K, Frosted Flakes and Corn Pops).
+
+```{r, collectcode=TRUE}
+kellogMDS <- isoMDS(kdist)
+
+plot(kellogMDS$points, type = "n", ylab = "", xlab = "",
+     main = "Non-metric scaling of Kellogg breakfast cereals")
+text(kellogMDS$points, labels = kellog$X, cex=0.8)
+```
+
+### (d)	Use the R function Shepard() in package MASS to construct a Shepard-diagram (see next section).
+
+```{r}
+kellogShep <- Shepard(kdist, kellogMDS$points)
+plot(kellogShep, pch = 21, cex = 0.8,
+     xlab = "d_ij", ylab = "delta and d hat",
+     main = "Shepard diagram for the breakfast cereal")
+lines(x = kellogShep$x, y = kellogShep$yf, col = "magenta")
+```
+

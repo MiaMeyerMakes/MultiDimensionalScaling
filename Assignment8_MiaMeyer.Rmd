@@ -1,0 +1,128 @@
+---
+title: "MDS Assignment 8"
+author: "M Meyer (22675760)"
+date: "2024-04-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(StatMatch)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+library(combinat)
+
+# import bioenv data:
+# setwd("~/Desktop/Multi-Dim Scaling/7")
+cereal <- read.csv("Kellog.csv", header=TRUE)
+cerealNum <- cereal[,-1]
+```
+
+
+
+## Assignment 7.1
+
+### (a) 	Note the steps for applying Procrustes analysis in practice, C&C 5.2.1
+
+Done in own time
+
+### (b) 	Write an R-function to implement the four steps of an orthogonal Procrustes-analysis in practice.
+
+```{r}
+
+myProcrustes <- function(X,Y)
+{
+  
+  q <- ncol(X)
+  p <- ncol(Y)
+  n <- nrow(X)
+  
+  # 1- padding to ensure the same nr of columns
+  if (q < p)
+  {
+    while(ncol(X) < ncol(Y))
+    {
+      X <- cbind(X,0)
+    }
+  } else if (q > p) {
+    while(ncol(Y) < ncol(X))
+    {
+      Y <- cbind(Y,0)
+    }
+  }
+  
+  # 2- column centre both of them
+  Xc <- apply(X, 2, function(x) x - mean(x))
+  Yc <- apply(Y, 2, function(y) y - mean(y))
+  
+  # 3- find svd of Y'X
+  YX <- svd(t(Yc)%*%Xc)
+    
+  L <- diag(YX$d)
+  U <- YX$u
+  V <- YX$v
+  
+  # 4- A=VY'
+  A <- V%*%t(U)
+  
+  # 5- Calculate rho
+  XAY <- Xc%*%A%*%t(Yc)
+  XX <- t(Xc)%*%Xc
+  rho <- sum(diag(XAY))/sum(diag(XX))
+  
+  fittedX <- rho*Xc%*%A
+  
+  stat_num <- (sum(L))^2
+  stat_denom <- sum(diag(t(Xc)%*%Xc))*sum(diag(t(Yc)%*%Yc))
+
+  procrustesStat <- 1-stat_num/stat_denom
+  
+  return(list(centred_Y = Yc, centred_X = Xc, fitted_X = fittedX, procrustesStat = procrustesStat))
+}
+
+```
+
+### (c) Obtain a classical scaling of the Breakfast cereal data as well as a non-metric scaling of the same data. Use the R-function in (b) to fit the non-metric MDS configuration of the Breakfast cereal data to the classical MDS display.
+
+```{r, fig.asp=1}
+# scaleCer <- scale(cerealNum)
+# Scale each variable to have range (0,1)
+# scaleCer <- apply(cerealNum, 2, function(x) (x - min(x)) / (max(x) - min(x)))
+# cerDist <- as.matrix(dist(scaleCer))
+
+cerealNum$Shelf <- as.factor(cerealNum$Shelf)
+cerealNum$VitMins <- as.factor(cerealNum$VitMins)
+cerDist <- daisy(cerealNum, metric = "euclidean", stand=TRUE)
+
+
+Y <- cmdscale(cerDist) #target - classic
+X <- (isoMDS(cerDist))$points #testee - non-metric
+
+result <- myProcrustes(X=X, Y=Y)
+result$fitted_X
+result$procrustesStat
+
+par(mfrow = c(2,2))
+
+plot(result$centred_Y, type = "n", main = "Classical scaling (Target)", xlab = "", ylab = "")
+text(result$centred_Y, labels = cereal$X, cex=0.7)
+
+plot(result$centred_Y, type = "n", main = "Classical vs fitted Non-metric", xlab = "", ylab = "")
+text(result$centred_Y, labels = cereal$X, cex=0.7, col = "darkred")
+text(result$fitted_X, labels = cereal$X, cex=0.7, col = "darkturquoise")
+legend("bottomleft", legend = c("Classical", "NonMetric"), col = c("darkred","darkturquoise"), 
+       bty = "n",cex = 0.5, lty = 1)
+
+plot(result$centred_X, type = "n", main = "Original non-metric scaling (Testee)", xlab = "", ylab = "")
+text(result$centred_X, labels = cereal$X, cex=0.7)
+
+plot(result$fitted_X, type = "n", main = "Fitted non-metric scaling (Testee)", xlab = "", ylab = "")
+text(result$fitted_X, labels = cereal$X, cex=0.7, lty = 1)
+
+par(mfrow = c(1,1))
+```
+
