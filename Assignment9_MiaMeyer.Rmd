@@ -1,0 +1,438 @@
+---
+title: "MDS Assignment 9"
+author: "M Meyer (22675760)"
+date: "2024-04-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(StatMatch)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+library(combinat)
+library(maps)
+
+# setwd("~/Desktop/Multi-Dim Scaling/9")
+Africa_MDS <- read.csv("AfricaMDS.csv", header=TRUE, row.names = 1)
+Afr_cities <- read.csv("Afr_cities.csv", header=TRUE)
+OrdSurvMaps <- read.csv("OrdSurvMaps.csv", header=TRUE, row.names = 1)
+
+speed <- read.csv("Speed.csv", header=TRUE, row.names = 1)
+```
+
+## Assignment 9.1
+
+### (a) Implement the algorithm given in C&C section 5.2.2 in an R-function.
+
+```{r}
+projProcrustes <- function(X,Y)
+{
+  Y0 <- Y
+  X0 <- X
+  # q > p
+  q <- ncol(X)
+  p <- ncol(Y)
+  n <- nrow(X)
+  dimdiff <- q-p
+  r20 <- 9999999999999999
+  r21 <- 99999999
+  counter = 0
+  
+  # 1- padding to ensure the same nr of columns
+  while(ncol(Y) < ncol(X))
+  {
+    Y <- cbind(Y,0)
+  }
+  
+  # continue the process until the new 
+  while (r21 < r20)
+  {
+    counter = counter+1
+    r20 <- r21
+    # 2- column centre both of them
+    Xc <- apply(X, 2, function(x) x - mean(x))
+    Yc <- apply(Y, 2, function(y) y - mean(y))
+    
+    # 3- find svd of Y'X
+    YX <- svd(t(Yc)%*%Xc)
+      
+    L <- diag(YX$d)
+    U <- YX$u
+    V <- YX$v
+    
+    # 4- A=VY'
+    A <- V%*%t(U)
+    
+    # Rotate X to XA
+    XA <- Xc%*%A
+    X <- XA
+    # Replace the final q-p columns of Y by final cols of XA
+    Y <- cbind(Y0, XA[,-(1:p)])
+    
+    # Calculate r2
+    r2Inner <- t(Y-XA)%*%(Y-XA)
+    r2 <- sum(diag(r2Inner))
+    r21 <- r2
+  }
+
+  
+  fittedX <- X[,1:p]
+  finalA <- A[,1:p]
+  return(list(r2 = r20,fitX = fittedX, A = finalA ,iters = counter))
+}
+
+```
+
+\###(b) Use projection Procrustes to project the 3D classical scaling solution in Africa.MDS onto the 2D scatterplot of longitude vs latitude.
+
+```{r}
+require(maps)
+require(geodist)
+capitals <- world.cities[world.cities$capital==1,]
+capitals <- capitals[c(3,4,6,28,49,73,80,90,92,94,98,102,109,110,118,124,161,164,223),]
+africa2D <- cbind(capitals$lat, capitals$long)
+
+africa.results <- projProcrustes(X = Africa_MDS, Y = africa2D)
+mds_df <- as.data.frame(africa.results$fitX)
+# Create the plot using ggplot2
+sp <- ggplot(mds_df, aes(x = V1, y = V2, label = rownames(mds_df))) +
+  geom_point(shape = 16, col = "mediumturquoise") +
+  labs(x = "X", y = "Y", title = "Ordinary Projection Procrustes on African Cities")
+
+sp + geom_text( size = 3, hjust=0, vjust=0, col = "turquoise4")
+```
+
+### (c) Apply the R-function to the Speed and Ordnance Survey data.
+
+The following function is for the case where p = q.
+
+```{r}
+projProcrustes2 <- function(X,Y)
+{
+  Y0 <- Y
+  X0 <- X
+  # q > p
+  q <- ncol(X)
+  p <- ncol(Y)
+  n <- nrow(X)
+  dimdiff <- q-p
+  r20 <- 9999999999999999
+  r21 <- 99999999
+  counter = 0
+  
+  # 1- padding to ensure the same nr of columns
+  while(ncol(Y) < ncol(X))
+  {
+    Y <- cbind(Y,0)
+  }
+  
+  # continue the process until the new 
+  while (r21 < r20)
+  {
+    counter = counter+1
+    r20 <- r21
+    # 2- column centre both of them
+    Xc <- apply(X, 2, function(x) x - mean(x))
+    Yc <- apply(Y, 2, function(y) y - mean(y))
+    
+    # 3- find svd of Y'X
+    YX <- svd(t(Yc)%*%Xc)
+      
+    L <- diag(YX$d)
+    U <- YX$u
+    V <- YX$v
+    
+    # 4- A=VY'
+    A <- V%*%t(U)
+    
+    # Rotate X to XA
+    XA <- Xc%*%A
+    X <- XA
+    # Replace the final q-p columns of Y by final cols of XA
+    # n/a
+    
+    # Calculate r2
+    r2Inner <- t(Y-XA)%*%(Y-XA)
+    r2 <- sum(diag(r2Inner))
+    r21 <- r2
+  }
+
+  fittedX <- X[,1:p]
+  finalA <- A[,1:p]
+  return(list(r2 = r20,fitX = fittedX, A = finalA ,iters = counter))
+}
+```
+
+The first plot illustrates the original speed data, the second plot shows how the speed data has been transformed and the third is a plot of the Ordnance Survey map.
+
+```{r}
+speed.results <- projProcrustes2(X = as.matrix(speed), Y = as.matrix(OrdSurvMaps))
+
+mds_df3 <- as.data.frame(speed)
+
+sp3 <- ggplot(mds_df3, aes(x = V2, y = V3, label = rownames(mds_df3))) +
+  geom_point(shape = 16, col = "coral") +
+  labs(x = "X", y = "Y", title = "Original Speed data")
+sp3 + geom_text( size = 3, hjust=0, vjust=0, col = "coral4")
+
+
+mds_df1 <- as.data.frame(speed.results$fitX)
+
+# Create the plot using ggplot2
+sp1 <- ggplot(mds_df1, aes(x = V1, y = V2, label = rownames(mds_df1))) +
+  geom_point(shape = 16, col = "mediumturquoise") +
+  labs(x = "X", y = "Y", title = "Projection Procrustes on Speed data")
+sp1 + geom_text( size = 3, hjust=0, vjust=0, col = "turquoise4")
+
+
+# ORDINANCE data
+
+mds_df2 <- as.data.frame(OrdSurvMaps)
+
+# Create the plot using ggplot2
+sp2 <- ggplot(mds_df1, aes(x = V1, y = V2, label = rownames(mds_df2))) +
+  geom_point(shape = 16, col = "magenta") +
+  labs(x = "X", y = "Y", title = "Ordnance data")
+sp2 + geom_text( size = 3, hjust=0, vjust=0, col = "magenta4")
+
+```
+
+## Assignment 9.2
+
+### (a) Find $\mathbf{A}$ and the minimum value of $r^2$ with least squares projection Procrustes.
+
+```{r}
+lsProjProcrustes <- function(X,Y)
+{
+  Y0 <- Y
+  X0 <- X
+  # q > p
+  q <- ncol(X)
+  p <- ncol(Y)
+  n <- nrow(X)
+  dimdiff <- q-p
+  YXA0 <- 9999999999
+  YXA1 <- 999999999999999
+  r2_0 <- 100000000000
+  r2_1 <- 0
+  counter = 0
+  
+  # 1- padding to ensure the same nr of columns
+  while(ncol(Y) < ncol(X))
+  {
+    Y <- cbind(Y,0)
+  }
+  
+  # continue the process until the new 
+  while ((r2_1-r2_0) > 0.0001)
+  {
+    counter = counter+1
+    # 2- column centre both of them
+    Xc <- apply(X, 2, function(x) x - mean(x))
+    Yc <- apply(Y, 2, function(y) y - mean(y))
+    
+    # 3- find svd of Y'X
+    YX <- svd(t(Yc)%*%Xc)
+      
+    L <- diag(YX$d)
+    U <- YX$u
+    V <- YX$v
+    
+    # 4- A=VY'
+    A <- V%*%t(U)
+    
+    # 5- Calculate rho
+    XAY <- Xc%*%A%*%t(Yc)
+    XX <- t(Xc)%*%Xc
+    rho <- sum(diag(XAY))/sum(diag(XX))
+    
+    # Rotate X to XA
+    XA <- rho*Xc%*%A
+    X <- XA
+    # Replace the final q-p columns of Y by final cols of XA
+    Y <- cbind(Y0, XA[,-(1:p)])
+    
+    # Calculate r2
+    r2Inner <- t(Y-XA)%*%(Y-XA)
+    r2_1 <- sum(diag(r2Inner))
+  }
+
+
+  fittedX <- X[,1:p]
+  finalA <- A[,1:p]
+  return(list(r2 = r2,fitX = fittedX, A = finalA ,iters = counter))
+}
+```
+
+```{r}
+lsProjProcrustes <- function(X,Y)
+{
+  Y0 <- Y
+  X0 <- X
+  # q > p
+  q <- ncol(X)
+  p <- ncol(Y)
+  n <- nrow(X)
+  dimdiff <- q-p
+  YXA0 <- 9999999999
+  YXA1 <- 999999999999999
+  counter = 0
+  
+  # 1- padding to ensure the same nr of columns
+  while(ncol(Y) < ncol(X))
+  {
+    Y <- cbind(Y,0)
+  }
+  
+  # continue the process until the new 
+  while (YXA1 > YXA0)
+  {
+    counter = counter+1
+    YXA0 <- YXA1
+    # 2- column centre both of them
+    Xc <- apply(X, 2, function(x) x - mean(x))
+    Yc <- apply(Y, 2, function(y) y - mean(y))
+    
+    # 3- find svd of Y'X
+    YX <- svd(t(Yc)%*%Xc)
+      
+    L <- diag(YX$d)
+    U <- YX$u
+    V <- YX$v
+    
+    # 4- A=VY'
+    A <- V%*%t(U)
+    
+    # Rotate X to XA
+    XA <- Xc%*%A
+    X <- XA
+    # Replace the final q-p columns of Y by final cols of XA
+    Y <- cbind(Y0, XA[,-(1:p)])
+    
+    # Calculate Y'XA
+    YXA1 <- sum(diag(t(Y)%*%XA))
+  }
+
+  # Calculate r2
+  r2Inner <- t(Y-XA)%*%(Y-XA)
+  r2 <- sum(diag(r2Inner))
+  fittedX <- X[,1:p]
+  finalA <- A[,1:p]
+  return(list(r2 = r2,fitX = fittedX, A = finalA ,iters = counter))
+}
+
+```
+
+```{r}
+# X - testee
+X <- matrix(c(0.90, 0.83, 0.87, 0.55, 0.56, 0.63, 0.28, 0.38, 0.38,
+              -0.09, 0.09, -0.01, 0.79, 0.65, 0.60, 0.27, 0.20, 0.19,
+              -0.03, -0.04, 0.07, -0.07, 0.04, 0.03, 0.45, 0.63, 0.77), byrow=FALSE, ncol = 3)
+# Y - target
+Y <- matrix(c(0.98, 0.76, 0.86, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 1.00, 0.84, 0.77, 0, 0, 0), byrow =FALSE, ncol = 2)
+
+ls.results <- lsProjProcrustes(X=X, Y=Y)
+
+
+mds_df1 <- as.data.frame(ls.results$fitX)
+
+# Create the plot using ggplot2
+sp1 <- ggplot(mds_df1, aes(x = V1, y = V2, label = rownames(mds_df1))) +
+  geom_point(shape = 16, col = "cornflowerblue") +
+  labs(x = "X", y = "Y", title = "LS Projection Procrustes")
+sp1 + geom_text( size = 3, hjust=1.5, vjust=0, col = "blue")
+```
+
+### (b) Use the inner project version of projection Procrustes and compare your answer to that obtained in (a).
+
+
+```{r}
+InnerProjProcrustes <- function(X,Y)
+{
+  Y0 <- Y
+  X0 <- X
+  # q > p
+  q <- ncol(X)
+  p <- ncol(Y)
+  n <- nrow(X)
+  dimdiff <- q-p
+  YXA0 <- 9999999999
+  YXA1 <- 999999999999999
+  counter = 0
+  
+  # 1- padding to ensure the same nr of columns
+  while(ncol(Y) < ncol(X))
+  {
+    Y <- cbind(Y,0)
+  }
+  
+  # continue the process until the new 
+  while (YXA1 > YXA0)
+  {
+    counter = counter+1
+    YXA0 <- YXA1
+    # 2- column centre both of them
+    Xc <- apply(X, 2, function(x) x - mean(x))
+    Yc <- apply(Y, 2, function(y) y - mean(y))
+    
+    # 3- find svd of Y'X
+    YX <- svd(t(Yc)%*%Xc)
+      
+    L <- diag(YX$d)
+    U <- YX$u
+    V <- YX$v
+    
+    # 4- A=VY'
+    A <- V%*%t(U)
+    
+    # Rotate X to XA
+    XA <- Xc%*%A
+    X <- XA
+    # Replace the final q-p columns of Y by final cols of XA
+    Y <- cbind(Y0, XA[,-(1:p)])
+    
+    # Calculate Y'XA
+    YXA1 <- sum(diag(t(Y)%*%XA))
+  }
+
+  # Calculate r2
+  r2Inner <- t(Y-XA)%*%(Y-XA)
+  r2 <- sum(diag(r2Inner))
+  fittedX <- X[,1:p]
+  finalA <- A[,1:p]
+  return(list(r2 = r2,fitX = fittedX, A = finalA ,iters = counter))
+}
+```
+
+```{r}
+# X - testee
+X <- matrix(c(0.90, 0.83, 0.87, 0.55, 0.56, 0.63, 0.28, 0.38, 0.38,
+              -0.09, 0.09, -0.01, 0.79, 0.65, 0.60, 0.27, 0.20, 0.19,
+              -0.03, -0.04, 0.07, -0.07, 0.04, 0.03, 0.45, 0.63, 0.77), byrow=FALSE, ncol = 3)
+# Y - target
+Y <- matrix(c(0.98, 0.76, 0.86, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 1.00, 0.84, 0.77, 0, 0, 0), byrow =FALSE, ncol = 2)
+
+inner.results <- InnerProjProcrustes(X=X, Y=Y)
+pp.results <- projProcrustes(X=X, Y=Y)
+
+inner_df <- as.data.frame(inner.results$fitX)
+pp_df <- as.data.frame(pp.results$fitX)
+
+ggdat1 <- cbind(rep(1:9,2),rbind(inner_df, pp_df), c(rep("Inner Product PP",9), rep("OPA",9)))
+colnames(ggdat1) <- c("id", "V1","V2", "pp.group")
+
+# Create the plot using ggplot2
+sp <- ggplot(ggdat1, aes(x = V1, y = V2, label = id)) +
+  geom_point(aes(color = factor(pp.group)),shape = 16) +
+  labs(x = "X", y = "Y", title = "Inner product & Ordinary Projection Procrustes")
+
+sp + 
+  geom_text(aes(color = factor(pp.group)), size = 4, hjust=0, vjust=0)
+```
