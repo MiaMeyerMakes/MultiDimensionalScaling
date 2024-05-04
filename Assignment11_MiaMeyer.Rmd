@@ -1,0 +1,256 @@
+---
+title: "MDS Assignment 11"
+author: "M Meyer (22675760)"
+date: "2024-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(StatMatch)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+library(combinat)
+library(maps)
+
+# setwd("~/Desktop/Multi-Dim Scaling/9")
+Nations <- read.csv("Nations.csv", header=TRUE, row.names = 1)
+
+```
+
+## Assignment 1.1
+
+(a) Implement the algorithm given in C&C section 5.2.2 in an R-function.
+
+### (a) Write an R function to implement the ALS-unfolding algorithm of Greenacre and Browne.
+
+The following algorithm performs 2-dimensional unfolding.
+Delta is an $\Delta: n\times m$ matrix.
+
+```{r}
+alsUnfold <- function(delta)
+{
+  delta2 <- delta^2
+
+  # 1. initialize
+  td <- -0.5 * (delta^2) # delta tilde
+  n <- nrow(delta)
+  m <- ncol(delta)
+  
+  In <- diag(1,n)
+  Im <- diag(1,m)
+  m1 <- matrix(rep(1/m, m^2), ncol = m)
+  n1 <- matrix(rep(1/n, n^2), ncol = n)
+  
+  C <- (In-n1)%*%td%*%(Im-m1)
+  svdC <- svd(C, nu = n, nv = m)
+  Ltemp <- matrix(0, ncol = m, nrow= n)
+  diag(Ltemp) <- svdC$d
+  svdC$u%*%Ltemp%*%t(svdC$v)
+  
+  l1 <- sqrt(svdC$d[1])
+  l2 <- sqrt(svdC$d[2])
+  temp0 <- matrix(0, nrow=m, ncol = 2)
+  diag(temp0) <- c(l1, l2)
+  Y0 <- svdC$v%*%temp0
+  Y <- Y0
+  
+  stresses <- numeric(1)
+  stress1 <- 99999999999
+  j = 1
+  
+  # START PERM HERE!!
+  
+  while (j < 1000)
+  {
+    stress0 <- stress1
+    
+    L <- t(Y)%*%Y
+    L1 <-  L[1,1]
+    L2 <- L[2,2]
+    
+    # 2 - Update X
+    
+    # Y0: m x 2 = 21 x 2
+    # Y0: 2 x m = 2  x 21
+    # delta r = 21 x 1
+    # h = 21 x 1 (diag as in a vector)
+    w <- matrix(0, ncol = n, nrow = 2)
+    c <- numeric(n)
+    psi <- matrix(0, ncol = n, nrow = 6)
+    psi[6,] <- 1
+    # 2 x 21 . (21 x 1)
+    h = diag(Y%*%t(Y))
+    for (r in 1:n)
+    {
+      w[,r] <- t(Y)%*%(delta2[r,]-h)
+      w1 <- w[1,r]
+      w2 <- w[2,r]
+      c[r] <- sum(delta2[r,]-h)
+      psi[5,r] <- -(4*(L1+L2)+c[r])
+      psi[4,r] <- 4*( (L2^2 + 4*L1*L2 + L1^2) + c[r]*(L1 + L2) )     
+      psi[3,r] <- m* (w1^2 + w2^2) + -4*(c[r]*(L1^2 + 4*L1*L2 + L2^2) + 4 *(L1*L2^2 + L2*L1^2))   
+      #psi[3,r] <- m*( (w1^2 + w2^2) + -4*(c[r]*(L1^2 + L2^2) + 4 *(L1*L2^2 + L2*L1^2-L1*L2)))   
+      psi[2,r] <- 4 *(4*((L1^2)*(L2^2) + c[r]*(L1*L2^2 + L2*L1^2)) - m* (L2*w1^2 + L1*w2^2)) 
+      psi[1,r] <- 4 * m * ((w1^2)*L2^2 + (w2^2)*L1^2) - c[r]*16*(L1^2)*(L2^2)
+    }
+    psi
+    psiroots = apply(psi,2,polyroot )
+    minroots = apply(Re(psiroots),2,min)
+    minroots
+    
+    XjCol1 <- w[1,]/(minroots-2*L1)
+    XjCol2 <- w[2,]/(minroots-2*L2)
+    
+    X <- cbind(XjCol1,XjCol2)
+    X <- scale(X,center = TRUE, scale = FALSE)
+    
+    svdX <- svd(X)
+    Ux <- svdX$u
+    dx <- diag(svdX$d)
+    
+    X <- Ux%*%dx
+    
+    xL <- t(X)%*%X
+    xL1 <-  xL[1,1]
+    xL2 <- xL[2,2]
+    
+    # 3 - Update Y
+    
+    # X: 18 x 2
+    # delta i = 18 x 1 (columns of delta)
+    # h = 18 x 1 (diag as in a vector)
+    xw <- matrix(0, ncol = m, nrow = 2)
+    xc <- numeric(m)
+    xpsi <- matrix(0, ncol = m, nrow = 6)
+    xpsi[6,] <- 1
+    # 2 x 21 . (21 x 1)
+    xh = diag(X%*%t(X))                       #EDIT
+    for (i in 1:m)                              # EDIT
+    {
+      xw[,i] <- t(X)%*%(delta2[,i]-xh)
+      xw1 <- xw[1,i]
+      xw2 <- xw[2,i]
+      xc[i] <- sum(delta2[,i]-xh)
+      xpsi[5,i] <- -(4*(xL1+xL2)+xc[i])
+      xpsi[4,i] <- 4*( (xL2^2 + 4*xL1*xL2 + xL1^2) + xc[i]*(xL1 + xL2) )     
+      xpsi[3,i] <- n* (xw1^2 + xw2^2) + -4*(xc[i]*(xL1^2 + 4*xL1*xL2 + xL2^2) + 4 *(xL1*xL2^2 + xL2*xL1^2))
+      xpsi[2,i] <- 4 *(4*((xL1^2)*(xL2^2) + xc[i]*(xL1*xL2^2 + xL2*xL1^2)) - n* (xL2*xw1^2 + xL1*xw2^2)) 
+      xpsi[1,i] <- 4 * n * ((xw1^2)*xL2^2 + (xw2^2)*xL1^2) - xc[i]*16*(xL1^2)*(xL2^2)
+    }
+    xpsi
+    xpsiroots = apply(xpsi,2,polyroot )
+    xminroots = apply(Re(xpsiroots),2,min)
+    xminroots
+    
+    YjCol1 <- xw[1,]/(xminroots-2*xL1)
+    YjCol2 <- xw[2,]/(xminroots-2*xL2)
+    
+    Y <- cbind(YjCol1,YjCol2)
+    
+    stressFun <- function(x,y) {
+      z <- numeric(nrow(y))
+      for (j in 1:(nrow(y))) {
+        z[j] <- t(x-y[j,])%*%(x-y[j,])
+      }
+      return(z)
+    }
+    
+    stressInner <- delta2 - t(apply(X, 1, stressFun, Y))
+    stress <- sum( stressInner^2 )
+    stress1 <- stress
+    stresses <- append(stresses, stress1)
+    
+    # terminate if converge
+    if (abs(stress0 - stress1) < 0.0001) {
+      break
+      }
+    
+    # else, perform PCA on Y and iterate
+    
+    j <- j+1
+    
+    Y <- scale(Y,center = TRUE, scale = FALSE)
+    
+    svdY <- svd(Y)
+    Uy <- svdY$u
+    dy <- diag(svdY$d)
+    
+    Y <- Uy%*%dy  
+    
+    # now just save the first X and Y to check with prof Lubbe
+    if (j==2) {
+      X_1 <- X
+      Y_1 <- Y
+    }
+  }
+  return(list(Y = Y, Y1 = Y_1, X1 = X_1, X=X, finalStress = tail(stresses,1), StressPath = stresses, iters = j))
+}
+
+```
+
+### (b) Describe the Nations dataset of Wish et al. (1972).
+
+This data set represents the ratings given by students to measure the similarity between pairs of nations. Every nation was given a score based on 18 variables with a scale of 1 to 9. 
+
+### (c) Perform a multidimensional unfolding on the nations data set with the above R function.
+
+The results below agree with that from Cox & Cox and the results are illustrated below, replicating Figure 8.4(i) and 8.4(ii).
+
+```{r, fig.asp=1}
+# delta is given
+delta <- as.matrix(Nations)
+unfoldResults <- alsUnfold(delta)
+
+natnames <- colnames(delta)
+varnames <- row.names(delta)
+
+y <- unfoldResults$Y
+x <- unfoldResults$X
+
+# PRINT OUT THE STRESS SUMMARY
+
+stressSummary <- data.frame(stress = c(unfoldResults$StressPath[2], median(unfoldResults$StressPath), tail(unfoldResults$StressPath,1)))
+row.names(stressSummary) <- c("Initial", "Median iteration", "Final")
+
+myTable = knitr::kable(stressSummary, col.names=c("Value"), caption="Summary of stress over iterations",escape=FALSE, digits=4)
+myTable %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+# PRINT OUT THE FINAL Y 
+
+finalY <- data.frame(Y = y)
+row.names(finalY) <- natnames
+
+myTableY = knitr::kable(finalY, col.names=c("x-coord", "y-coord"), caption="Final Y configuration (nations)",escape=FALSE, digits=4)
+myTableY %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+# PRINT OUT THE FINAL Y 
+
+finalX <- data.frame(X = x)
+row.names(finalX) <- varnames
+
+myTableX = knitr::kable(finalX, col.names=c("x-coord", "y-coord"), caption="Final X configuration (variables)",escape=FALSE, digits=4)
+myTableX %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+# CREATE PLOTS OF THE RESULTS
+
+plot(y, type = "n", main = "(i) - Unfolding analysis of the rating of nations", xlab = "", ylab = "",
+     xlim = c(min(min(y[,1]), min(x[,1])), max(max(y[,1]), max(x[,1]))),
+     ylim = c(min(min(y[,2]), min(x[,2])), max(max(y[,2]), max(x[,2]))))
+text(y, labels = natnames, cex=0.7, col = "darkred")
+text(x, labels = varnames, cex=0.7, col = "darkturquoise")
+legend("topright", legend = c("Nations", "Variables"), col = c("darkred","darkturquoise"), 
+       bty = "n",cex = 0.75, lty = 1)
+
+plot(y, type = "n", main = "(ii) - Magnifying the region occupied by the countries in (i)", xlab = "", ylab = "")
+text(y, labels = natnames, cex=0.7, col = "darkred")
+
+```
+
