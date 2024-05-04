@@ -1,0 +1,94 @@
+---
+title: "MDS Assignment 12"
+author: "M Meyer (22675760)"
+date: "2024-05-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(StatMatch)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+library(combinat)
+library(maps)
+
+melanoma <- data.frame(h = c(22,16,19,11), t = c(2,54,33,17), e = c(10,115,73,28), row.names = c("H", "S", "N", "I"))
+
+```
+
+## Assignment 12.1
+
+### (a) Show that the above 𝑼, 𝑽 and $D_r$ provide the GSVD of 𝑨. 
+
+### (b) Write an R function to calculate the GSVD of a rectangular matrix.
+
+The code below uses the function for the symmetric square root matrix that was formed for Assignment 2.
+
+```{r}
+symSqrt <- function(A) {
+  # Perform eigenvalue decomposition
+  eigDecomp <- eigen(A)
+  
+  # Get the eigenvectors and eigenvalues
+  eigVecs <- eigDecomp$vectors
+  eigVals <- eigDecomp$values
+  
+  # Calculate the square root of the eigenvalues
+  sqrtEigVals <- sqrt(eigVals)
+  
+  # Form the symmetric square root matrix
+  sqrtMat <- eigVecs %*% diag(sqrtEigVals) %*% t(eigVecs)
+  
+  return(sqrtMat)
+}
+
+myGSVD <- function(dat=melanoma)
+{
+  A <- as.matrix(A)
+  Dr <- diag(apply(A, 1, sum))
+  Dc <- diag(apply(A, 2, sum))
+  Omega <- solve(Dr)
+  Phi <- solve(Dc)
+  Osqrt <- symSqrt(Omega)
+  Phisqrt <- symSqrt(Phi)
+  
+  N <- (svd(Osqrt %*% A %*% Phisqrt))$u
+  M <- (svd(Osqrt %*% A %*% Phisqrt))$v
+  D <- diag(round((svd(Osqrt %*% A %*% Phisqrt))$d, 3))
+  
+  U <- solve(Osqrt) %*% N
+  V <- solve(Phisqrt) %*% M
+  
+  return(list(round(U,4), D, round(V, 4)))
+}
+
+melanomaResults <- myGSVD(melanoma)
+
+# > round(t(U)%*%Omega%*%U, 2)
+#      [,1] [,2] [,3]
+# [1,]    1    0    0
+# [2,]    0    1    0
+# [3,]    0    0    1
+# > round(t(V)%*%Phi%*%V, 2)
+#      [,1] [,2] [,3]
+# [1,]    1    0    0
+# [2,]    0    1    0
+# [3,]    0    0    1
+```
+
+## Assignment 12.2
+
+### Make use of the R function written in 12.1 for calculating the GSVD to obtain the correspondence analysis of C&C Table 9.1 and compute the chi-square distances between the rows as well as between the columns.
+
+## Assignment 12.3
+
+### Carry out a correspondence analysis on C&C Table 9.1. Your R function must provide for displaying the row space and column space on separate diagrams as well as on the same diagram; the total inertia must be calculated as well as the relative contributions of the different dimensions to the total inertia.
+
+```{r}
+
+```
