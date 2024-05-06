@@ -49,7 +49,7 @@ symSqrt <- function(A) {
 
 myGSVD <- function(dat=melanoma)
 {
-  A <- as.matrix(A)
+  A <- as.matrix(dat)
   Dr <- diag(apply(A, 1, sum))
   Dc <- diag(apply(A, 2, sum))
   Omega <- solve(Dr)
@@ -64,31 +64,94 @@ myGSVD <- function(dat=melanoma)
   U <- solve(Osqrt) %*% N
   V <- solve(Phisqrt) %*% M
   
-  return(list(round(U,4), D, round(V, 4)))
+  return(list(U = round(U,4), D=D, V=round(V, 4)))
 }
 
-melanomaResults <- myGSVD(melanoma)
-
-# > round(t(U)%*%Omega%*%U, 2)
-#      [,1] [,2] [,3]
-# [1,]    1    0    0
-# [2,]    0    1    0
-# [3,]    0    0    1
-# > round(t(V)%*%Phi%*%V, 2)
-#      [,1] [,2] [,3]
-# [1,]    1    0    0
-# [2,]    0    1    0
-# [3,]    0    0    1
 ```
 
 ## Assignment 12.2
 
 ### Make use of the R function written in 12.1 for calculating the GSVD to obtain the correspondence analysis of C&C Table 9.1 and compute the chi-square distances between the rows as well as between the columns.
 
+```{r}
+Xnorm <- melanoma/sum(melanoma)
+myGSVD(Xnorm)
+
+# Now calculate the chisq distances between the rows and columns
+Z <- as.matrix(Xnorm)
+
+Dr <- diag(apply(Z, 1, sum))
+Dc <- diag(apply(Z, 2, sum))
+
+# get all the combinations of the rows and the columns and store them in matrices
+rowcombos <- t(combn(1:4,2))
+row.chisq <- numeric(nrow(rowcombos))
+colcombos <- t(combn(1:3,2))
+col.chisq <- numeric(nrow(colcombos))
+
+# get the matrix with the e_i and e_j vectors in 
+row.e <- diag(nrow(melanoma))
+col.e <- diag(ncol(melanoma))
+
+# calculate the chisq distances between the rows
+for (i in 1:nrow(rowcombos))
+{
+  e.diff <- row.e[,rowcombos[i,1]]-row.e[,rowcombos[i,2]]
+  dzd    <- solve(Dr)%*%Z%*%solve(Dc)%*%t(Z)%*%solve(Dr)
+  row.chisq[i] <- t(e.diff) %*% (dzd)  %*% (e.diff)
+  print(e.diff)
+}
+
+# calculate the chisq distances between the columns
+for (j in 1:nrow(colcombos))
+{
+  e.diff <- col.e[,colcombos[j,1]]-col.e[,colcombos[j,2]]
+  dzd    <- solve(Dc)%*%t(Z)%*%solve(Dr)%*%Z%*%solve(Dc)
+  col.chisq[j] <- t(e.diff) %*% (dzd) %*% (e.diff)
+  # print(e.diff)
+}
+
+# Now display the results in a neat table
+
+rowdistances = data.frame(cbind(rowcombos,sqrt(row.chisq)))
+colnames(rowdistances) <- c("row i", "row h", "Chisq distance")
+coldistances = data.frame(cbind(colcombos,sqrt(col.chisq)))
+colnames(coldistances) <- c("col j", "col k", "Chisq distance")
+
+myTable1 = knitr::kable(rowdistances, caption="Chi-squared distances between the rows of the melanoma data",escape=FALSE, digits=3)
+myTable1 %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+myTable2 = knitr::kable(coldistances, caption="Chi-squared distances between the columns of the melanoma data",escape=FALSE, digits=3)
+myTable2 %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+```
+
+
 ## Assignment 12.3
 
 ### Carry out a correspondence analysis on C&C Table 9.1. Your R function must provide for displaying the row space and column space on separate diagrams as well as on the same diagram; the total inertia must be calculated as well as the relative contributions of the different dimensions to the total inertia.
 
 ```{r}
+res <- myGSVD(Xnorm)
+
+A <- res$U
+D <- res$D
+B <- res$V
+
+U <-  solve(Dr)%*%A
+V <-  solve(Dc)%*%B
+UD <- U%*%D
+VD <- V%*%D
+
+# Calculate the matrices that are submitted to correspondence analysis
+
+# DrX-1c
+solve(Dr)%*%Z - matrix(rep(apply(Z, 2, sum), nrow(solve(Dr)%*%Z)), byrow=TRUE, nrow = nrow(solve(Dr)%*%Z))
+
+# DcX-1r
+solve(Dc)%*%t(Z) - matrix(rep(apply(Z, 1, sum), nrow(solve(Dc)%*%t(Z))), byrow=TRUE, nrow = nrow(solve(Dc)%*%t(Z)))
+
 
 ```
