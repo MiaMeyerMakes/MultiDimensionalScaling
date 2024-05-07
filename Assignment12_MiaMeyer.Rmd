@@ -23,7 +23,9 @@ melanoma <- data.frame(h = c(22,16,19,11), t = c(2,54,33,17), e = c(10,115,73,28
 
 ## Assignment 12.1
 
-### (a) Show that the above 𝑼, 𝑽 and $D_r$ provide the GSVD of 𝑨. 
+### (a) Show that the above 𝑼, 𝑽 and $D_r$ provide the GSVD of 𝑨.
+
+![Handwritten proof of Assignment 12.1](IMG_2688.jpg){width="516"}
 
 ### (b) Write an R function to calculate the GSVD of a rectangular matrix.
 
@@ -128,12 +130,11 @@ myTable2 %>%
 
 ```
 
-
 ## Assignment 12.3
 
 ### Carry out a correspondence analysis on C&C Table 9.1. Your R function must provide for displaying the row space and column space on separate diagrams as well as on the same diagram; the total inertia must be calculated as well as the relative contributions of the different dimensions to the total inertia.
 
-```{r}
+```{r, fig.asp=1}
 res <- myGSVD(Xnorm)
 
 A <- res$U
@@ -142,16 +143,46 @@ B <- res$V
 
 U <-  solve(Dr)%*%A
 V <-  solve(Dc)%*%B
-UD <- U%*%D
-VD <- V%*%D
+UD <- U%*%D # UD_lambda
+VD <- V%*%D # VD_lambda
+
+UD
+VD
+
 
 # Calculate the matrices that are submitted to correspondence analysis
 
+# AVOIDING THE TRIVIAL SOLUTION 
+
 # DrX-1c
-solve(Dr)%*%Z - matrix(rep(apply(Z, 2, sum), nrow(solve(Dr)%*%Z)), byrow=TRUE, nrow = nrow(solve(Dr)%*%Z))
-
+rowprof <- solve(Dr)%*%Z - matrix(rep(apply(Z, 2, sum), nrow(solve(Dr)%*%Z)), byrow=TRUE, nrow = nrow(solve(Dr)%*%Z))
+rowprof
 # DcX-1r
-solve(Dc)%*%t(Z) - matrix(rep(apply(Z, 1, sum), nrow(solve(Dc)%*%t(Z))), byrow=TRUE, nrow = nrow(solve(Dc)%*%t(Z)))
+colprof <- solve(Dc)%*%t(Z) - matrix(rep(apply(Z, 1, sum), nrow(solve(Dc)%*%t(Z))), byrow=TRUE, nrow = nrow(solve(Dc)%*%t(Z)))
+colprof
+# Plot row and column space
 
+plot(rowprof[,1:2], type= "n", main = "Row profiles")
+text(rowprof[,1:2], labels = row.names(melanoma))
+plot(colprof[,1:2], type = "n", main = "Column profiles")
+text(colprof[,1:2], labels = colnames(melanoma))
+
+plot(colprof[,1:2], type= "n", xlim = c(-0.15, 0.5), ylim = c(-0.25, 0.08))
+text(rowprof[,1:2], labels = row.names(melanoma), col = "magenta4")
+text(colprof[,1:2], labels = colnames(melanoma), col ="green4")
+
+# INERTIA
+DD <- D%*%D
+I = sum(diag(DD))-1
+Idim1 = DD[2,2]/I
+Idim2 = DD[3,3]/I
+
+Inertias = data.frame(c(I, Idim1*100,Idim2*100))
+colnames(Inertias) <- c("Inertia and contributions")
+row.names(Inertias) <- c("Total Inertia", "Contribution of dimension 1", "Contribution of dimension 2")
+
+myTable1 = knitr::kable(Inertias, caption="The total inertia and the relative contributions of the dimensions for the melanoma data",escape=FALSE, digits=3)
+myTable1 %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 ```
