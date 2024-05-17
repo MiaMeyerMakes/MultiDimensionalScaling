@@ -1,0 +1,47 @@
+---
+title: "MDS Assignment 13"
+author: "M Meyer (22675760)"
+date: "2024-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(StatMatch)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(cluster)
+library(combinat)
+library(maps)
+
+gw <- read.csv('groundwater.csv')
+```
+
+## Assignment 13.1
+
+### (a) Calculate the association rate matrix.
+
+### (b) Carry out a correspondence analysis of the given data.
+
+### (c) A graph of attractions can be obtained as follows: Arrange the socio-professional categories in a column corresponding to their projections on the first axis of the correspondence analysis graph. Do the same with the qualities. Now let these two columns face each other and connect the socio- professional categories with those having positive association rates with then (> 0.35). Interpret.
+
+### (d) How many axes should be used? Interpret the first two axes.
+
+```{r}
+
+```
+
+## Assignment 13.2
+
+### (a) Write an R function to implement the INDSCAL algorithm.
+
+### (b) Use the above R function to perform Individual Differences Scaling on the groundwater dataset.
+
+```{r}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
